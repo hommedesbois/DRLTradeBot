@@ -1,2 +1,2 @@
 # DRLTradeBot
-Deep Reinforcement Learning (DRL) applied to financial time series prediction
+Deep Reinforcement Learning (DRL) used for financial time series prediction.
