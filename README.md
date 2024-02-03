@@ -13,7 +13,7 @@ To set up your environment to run the code, you can create a Conda environment u
 
 ```bash
 conda env create -f environment.yml
-
+```
 This will create an environment named `tradebot`. You can change the environment name directly in the `environment.yml` file if desired.
 
 ### Example Notebook
