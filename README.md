@@ -24,9 +24,9 @@ This will create an environment named `tradebot`. You can change the environment
 
 - **Ticker**: By default, the algorithm uses `"sinus_noise_std_1"` to generate an artificial time series consisting of a sinus signal with superimposed noise from a Student's t-distribution with 5 degrees of freedom. This will give you a first intuition. It's also fully compatible with any ticker supported by Yahoo Finance, such as `'BTC-USD'` or `'AAPL'`.
 
-- **Network Architecture**: The core of this model is an LSTM (Long Short-Term Memory) network, which is particularly well-suited for learning from sequences of data, making it ideal for time series prediction. The model also employs batch learning for efficient training over large datasets.
-
 - **Features and Asset Classes**: The algorithm allows for the experimentation with numerous combinations of features and asset classes. Features must be defined as a list of tuples, where the first element is the feature (e.g., a technical indicator) and the second element is the scaling method (e.g., z-score, min-max scaling). There are a few custom-built features like `ratio_sma_ws1_ws2`, which computes the ratio of two moving averages of window size `ws1` and `ws2`. Users are encouraged to test various feature combinations to discover the most effective predictors for different asset classes. The `FeatureEngineer` class is built on top of `stockstats`, enabling also the integration of those features supported by the library (e.g., `log-ret`, `close_[ws]_sma` for log returns, and simple moving average based on the closing price over a specified window size).
+
+- - **Network Architecture**: The core of this model is an LSTM (Long Short-Term Memory) network, which is particularly well-suited for learning from sequences of data, making it ideal for time series prediction. The model also employs batch learning for efficient training over large datasets.
 
 ## Collaboration
 
