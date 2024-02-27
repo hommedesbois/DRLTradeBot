@@ -26,8 +26,8 @@ class DQLAgent:
         self.gamma = 0.5
         self.tau = 0.001
         self.batch = batch
-        self.batch_size = 128
-        self.mini_batch_size = 128
+        self.batch_size = 256
+        self.mini_batch_size = 256
         self.max_treward = 0
         self.trewards = list()
         self.losses = list()

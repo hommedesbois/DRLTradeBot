@@ -2,12 +2,16 @@
 Yahoo Finance API
 """
 from __future__ import annotations
-
+import io, sys, os
+from pathlib import Path
+#from .enums import *
 import numpy as np
 import pandas as pd
 import yfinance as yf
 from scipy.stats import t
-from datetime import timedelta
+from datetime import *
+import urllib.request
+import zipfile
 
 class YahooDownloader:
     """Provides methods for retrieving daily stock data from
@@ -34,7 +38,7 @@ class YahooDownloader:
         self.end_date = end_date
         self.ticker = ticker
         self.ticker_list = ticker_list
-        self.interval = interval 
+        self.interval = interval
 
     def fetch_data(self, proxy=None) -> pd.DataFrame:
         """Fetches data from Yahoo API
@@ -139,85 +143,166 @@ class YahooDownloader:
         else:
             raise ValueError("Either provide ticker or ticker list")
 
+class BinanceDownloader:
+  
+  BASE_URL = 'https://data.binance.vision/'
 
+  def __init__(self, start_date, end_date, ticker, interval='1d'):
+    self.ticker = ticker[0] # to be consistent with other data loaders
+    self.interval = interval
+    self.start_date = start_date
+    self.end_date = end_date
+    self.save_to_file = True 
+
+
+  def fetch_data(self):
+    # check if self.interval is supported by binance 
+    dates = pd.date_range(start = self.start_date, end=self.end_date, freq="D").to_pydatetime().tolist()
+    dates = [date.strftime("%Y-%m-%d") for date in dates]
+    raw_df = pd.DataFrame(columns=['date', 'open', 'high', 'low', 'close', 'volume'])
+    i = 1
+    for date in dates:
+      path = f'data/spot/daily/klines/{self.ticker.upper()}/{self.interval}/'
+      file_name = "{}-{}-{}.zip".format(self.ticker.upper(), self.interval, date)
+      try:
+        daily_raw_df = self._load_file(path, file_name)
+      except FileNotFoundError:
+        daily_raw_df = self._download_file(path, file_name)
+      daily_raw_df = daily_raw_df.iloc[:,:6]
+      daily_raw_df.columns = raw_df.columns
+      raw_df = pd.concat([raw_df, daily_raw_df], ignore_index=True)
+      self._print_progress_bar(i, len(dates), prefix = 'Progress', suffix = 'Complete')
+      i += 1
+
+    raw_df['date'] = pd.to_datetime(raw_df['date'], unit='ms')
+    return raw_df
+
+  def _download_file(self, base_path, file_name):
+    download_path = "{}{}".format(base_path, file_name)
+    current_dir = os.path.dirname(os.path.realpath(__file__))
+    root_path = os.path.dirname(current_dir)
+
+    save_path = os.path.join(root_path, base_path)
+  
+    # in case file AND dir do not exist 
+    if not os.path.exists(save_path): 
+      Path(save_path).mkdir(parents=True, exist_ok=True)
+      #print("Creating save path")
+    
+    try:
+      download_url = urllib.parse.urljoin(self.BASE_URL, download_path) 
+      zip_file = urllib.request.urlopen(download_url)
+      length = zip_file.getheader('content-length')
+      if length:
+        length = int(length)
+        blocksize = max(4096,length//100)
+      
+      if self.save_to_file:
+        with open(f'{save_path}/{file_name}', 'wb') as out_file:
+          dl_progress = 0
+          #print("\nFile Download: {}".format(save_path))
+          while True:
+            buf = zip_file.read(blocksize)   
+            if not buf:
+              break
+            dl_progress += len(buf)
+            out_file.write(buf)
+            #done = int(50 * dl_progress / length)
+            #sys.stdout.write("\r[%s%s]" % ('#' * done, '.' * (50-done)) )    
+            #sys.stdout.flush()
+
+        zip_file_path = os.path.join(save_path, file_name)
+        #zip_in_memory = io.BytesIO(zip_file.read())
+        with zipfile.ZipFile(zip_file_path) as zf:
+          csv_file_name = file_name.replace('.zip', '.csv')
+          with zf.open(csv_file_name) as csv_file:
+            df = pd.read_csv(csv_file)
+        
+          return df
+      else:
+        zip_in_memory = io.BytesIO(zip_file.read())
+        with zipfile.ZipFile(zip_in_memory) as zf:
+          csv_file_name = file_name.replace('.zip', '.csv')
+          with zf.open(csv_file_name) as csv_file:
+            df = pd.read_csv(csv_file)
+        
+          return df
+    except urllib.error.HTTPError:
+      print("\nFile not found: {}".format(download_url))
+      pass
+
+  def _load_file(self, base_path, file_name):
+    current_dir = os.path.dirname(os.path.realpath(__file__))
+    root_path = os.path.dirname(current_dir)
+    save_path = os.path.join(root_path, base_path)
+    zip_file_path = os.path.join(save_path, file_name)
+    #if not os.path.exists(zip_file_path):
+       #print("File not on harddrive, proceeding to download!")
+       #print(zip_file_path)
+    #   return FileNotFoundError 
+    with zipfile.ZipFile(zip_file_path) as zf:
+      #  # Since the ZIP and CSV have the same name, derive the CSV name directly
+        csv_file_name = file_name.replace('.zip', '.csv')  # Assuming the file extension is .zip
+        with zf.open(csv_file_name) as csv_file:
+            df = pd.read_csv(csv_file)
+        
+        return df
+
+  def _print_progress_bar(self, iteration, total, prefix='', suffix='', decimals=0, length=50, fill='█'):
+    """
+    Call in a loop to create terminal progress bar
+    @params:
+        iteration   - Required  : current iteration (Int)
+        total       - Required  : total iterations (Int)
+        prefix      - Optional  : prefix string (Str)
+        suffix      - Optional  : suffix string (Str)
+        decimals    - Optional  : positive number of decimals in percent complete (Int)
+        length      - Optional  : character length of bar (Int)
+        fill        - Optional  : bar fill character (Str)
+    """
+    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+    filled_length = int(length * iteration // total)
+    bar = fill * filled_length + '-' * (length - filled_length)
+    sys.stdout.write('\r%s |%s| %s%% %s' % (prefix, bar, percent, suffix)),
+    # Print New Line on Complete
+    if iteration == total: 
+        print()
+
+
+    
 class LocalDataLoader:
 
-    def __init__(self, start_date: str, end_date: str, ticker=None, interval='1d'):
+  def __init__(self, start_date: str, end_date: str, ticker=None, interval='1d'):
 
-        self.start_date = start_date
-        self.end_date = end_date
-        self.ticker = ticker[0]
-        self.interval = interval
+    self.start_date = start_date
+    self.end_date = end_date
+    self.ticker = ticker[0]
+    self.interval = interval
 
-        
-    def fetch_data(self) -> pd.DataFrame:    
-        path_to_file = f'data/{self.ticker}.csv'
-        data = pd.read_csv(path_to_file)
-        data['Timestamp'] = pd.to_datetime(data['Timestamp'], unit='s')
-        data.dropna(inplace=True)
-        try:
-            # convert the column names to standardized names
-            data.columns = [
-                    "date",
-                    "open",
-                    "high",
-                    "low",
-                    "close",
-                    "volume",
-                    "volume_usd",
-                    "weighted_price",
-                ]
-        except NotImplementedError:
-            print("the features are not supported currently")
-
-        data.drop(labels = ["volume_usd", "weighted_price"], axis=1, inplace=True)
-        complete_days =  data.groupby(data['date'].dt.date).filter(lambda x: len(x) == 1440).reset_index(drop=True)
-
-        # Define your desired date range
-        desired_dates = [self.start_date, self.end_date]
-        desired_dates = pd.to_datetime(desired_dates)
-
-        # Filter for desired dates
-        filtered_data = complete_days[(complete_days['date'].dt.date >= desired_dates[0].date()) & 
-                                  (complete_days['date'].dt.date <= desired_dates[1].date())]
-
-        # Get unique complete days
-        unique_complete_days = filtered_data['date'].dt.date.unique()
-
-        # Randomly select x days or the total number of days if x is greater
-        num_days_to_select = min(len(unique_complete_days), self.number_of_days)
-        np.random.seed(42)
-        selected_days = np.random.choice(unique_complete_days, num_days_to_select, replace=False)
-
-        # Return data for the selected days
-        return filtered_data[filtered_data['date'].dt.date.isin(selected_days)]
-
-
-
-    def generate_artifical_data(self, base_price = 100, period = 5, amplitude = 15, add_noise=False) -> pd.DataFrame:
-        freq = self.interval
-        if freq[-1].lower() == 'm':
-            freq = freq[:-1]+'T'
-        dates = pd.date_range(start=self.start_date, end=self.end_date, freq=freq)
-        n_points = len(dates)
-        period = n_points / period
-        point_arr = np.arange(n_points)
-        stock_data = base_price + amplitude * np.sin(2 * np.pi * point_arr / period)
+  def generate_artifical_data(self, base_price = 100, period = 5, amplitude = 15, add_noise=False) -> pd.DataFrame:
+    freq = self.interval
+    if freq[-1].lower() == 'm':
+      freq = freq[:-1]+'T'
+    dates = pd.date_range(start=self.start_date, end=self.end_date, freq=freq)
+    n_points = len(dates)
+    period = n_points / period
+    point_arr = np.arange(n_points)
+    stock_data = base_price + amplitude * np.sin(2 * np.pi * point_arr / period)
         # create noise with stundet t distribution of degree 5
-        if add_noise:
-            dof = 5  # Degrees of freedom for t-distribution
-            mean_return = 0.1
-            std_dev = int(self.ticker.split('_')[-1])
+    if add_noise:
+      dof = 5  # Degrees of freedom for t-distribution
+      mean_return = 0.1
+      std_dev = int(self.ticker.split('_')[-1])
 
             # Generate returns
-            noise = t.rvs(dof, size=n_points)
+      noise = t.rvs(dof, size=n_points)
 
             # Scale and shift the returns
-            scaled_noise = noise * std_dev + mean_return
+      scaled_noise = noise * std_dev + mean_return
 
-            stock_data += scaled_noise
+      stock_data += scaled_noise
         
-        df = pd.DataFrame({'close': stock_data}, index=dates)
-        df.index.name = 'date'
-        df = df.reset_index()
-        return df
+    df = pd.DataFrame({'close': stock_data}, index=dates)
+    df.index.name = 'date'
+    df = df.reset_index()
+    return df

@@ -3,7 +3,7 @@ import random
 import numpy as np
 import pandas as pd
 
-from .dataloader import YahooDownloader, LocalDataLoader
+from .dataloader import YahooDownloader, LocalDataLoader, BinanceDownloader
 from .preprocessor import FeatureEngineer
 
 
@@ -34,9 +34,11 @@ class Finance:
         self.observation_space = ObservationSpace(self.lags)
         self.from_file = False
         self.artifical_data = ['sinus'] # add more prefixes for artificial data
+        self.crypto_currencies = ['BTCUSDT']
         self.yahoo_downloader = YahooDownloader(self.start, self.end, ticker = self.symbol, interval=self.interval)
+        self.binance_downloader = BinanceDownloader(self.start, self.end, ticker = self.symbol, interval=self.interval)
         self.local_data_loader = LocalDataLoader(self.start, self.end, ticker = self.symbol, interval=self.interval)
-        self.feature_engineer = FeatureEngineer(self.features_scaling)
+        self.feature_engineer = FeatureEngineer(self.features_and_scaling)
         self.action_space = ActionSpace(2)
         self._get_data()
         self._prepare_data()
@@ -44,8 +46,10 @@ class Finance:
     def _get_data(self):
 
         if self.symbol[0].split('_')[0] in self.artifical_data:
-                self.raw = self.local_data_loader.generate_artifical_data(add_noise=True)
-                #self.raw = self.file_loader.fetch_data()
+            self.raw = self.local_data_loader.generate_artifical_data(add_noise=True)
+            #self.raw = self.file_loader.fetch_data()
+        elif self.symbol[0] in self.crypto_currencies:
+            self.raw = self.binance_downloader.fetch_data()    
         else:
             self.raw = self.yahoo_downloader.fetch_data()
 
